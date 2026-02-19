@@ -30,11 +30,12 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
   const fire = useCallback(() => {
     if (!jetRef.current) return;
     const now = Date.now();
-    if (now - lastFireTime.current < 120) return;
+    if (now - lastFireTime.current < 110) return;
     
     lastFireTime.current = now;
     const pos = jetRef.current.position.clone();
-    pos.z -= 2;
+    // 비행기 코 부분(기두)에서 발사되도록 위치 조정 (-1.25 정도가 코 끝)
+    pos.z -= 1.3; 
     
     setBullets((prev) => [
       ...prev,
@@ -43,8 +44,10 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
   }, []);
 
   const spawnEnemy = useCallback((difficulty: number) => {
+    // 플레이어의 이동 가로 범위에 맞춤
     const x = (Math.random() - 0.5) * (viewport.width * 1.5);
-    const y = (Math.random() - 0.5) * (viewport.height * 1.2) + 3;
+    // 중요: 플레이어의 상하 이동 범위와 일치하도록 Y축 생성 로직 수정
+    const y = (Math.random() - 0.5) * viewport.height + 1.5;
     const z = -60;
     
     setEnemies((prev) => [
@@ -52,7 +55,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
       { 
         id: Math.random().toString(), 
         position: new Vector3(x, y, z), 
-        speed: 0.45 + (Math.random() * 0.2) + (difficulty * 0.05) 
+        speed: 0.5 + (Math.random() * 0.2) + (difficulty * 0.08) 
       }
     ]);
   }, [viewport.width, viewport.height]);
@@ -79,27 +82,25 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
 
     // Jet movement
     if (jetRef.current) {
-      // 뷰포트 영역 내에서 이동 범위 조정
-      // 기존 +3 오프셋을 +1.5로 줄여 기본 위치를 낮춤
       const targetX = (pointer.x * viewport.width) / 2;
       const targetY = (pointer.y * viewport.height) / 2 + 1.5; 
       
       const boundX = viewport.width / 2 - 0.8;
-      const boundYTop = viewport.height + 1;
-      const boundYBottom = -1.5; // 바닥 그리드 근처까지 내려가도록 허용
+      const boundYTop = viewport.height + 0.5;
+      const boundYBottom = -1.2;
 
       jetRef.current.position.x = MathUtils.lerp(
         jetRef.current.position.x, 
         MathUtils.clamp(targetX, -boundX, boundX), 
-        0.15
+        0.18
       );
       jetRef.current.position.y = MathUtils.lerp(
         jetRef.current.position.y, 
         MathUtils.clamp(targetY, boundYBottom, boundYTop), 
-        0.15
+        0.18
       );
       
-      // Banking & Tilting
+      // Banking & Tilting (전방을 향하도록 틸트 감도 조정)
       const tiltZ = -(jetRef.current.position.x - targetX) * 0.6;
       const tiltX = (jetRef.current.position.y - targetY) * 0.4;
       jetRef.current.rotation.z = MathUtils.lerp(jetRef.current.rotation.z, tiltZ, 0.1);
@@ -107,7 +108,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
     }
 
     // Enemy Spawning
-    const spawnInterval = Math.max(1000 - (difficulty * 150), 350);
+    const spawnInterval = Math.max(800 - (difficulty * 120), 300);
     const now = Date.now();
     if (now - lastSpawnTime.current > spawnInterval) {
       spawnEnemy(difficulty);
@@ -119,7 +120,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
 
     // Entities Update
     setBullets((prev) => prev
-      .map((b) => ({ ...b, position: b.position.clone().add(new Vector3(0, 0, -1.8)) }))
+      .map((b) => ({ ...b, position: b.position.clone().add(new Vector3(0, 0, -2.0)) }))
       .filter((b) => b.position.z > -70)
     );
 
@@ -143,16 +144,16 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
           if (bullet.position.distanceTo(enemy.position) < 2.0) {
             hitEnemyIds.push(enemy.id);
             filteredBullets = filteredBullets.filter(b => b.id !== bullet.id);
-            shakeRef.current = 0.4;
+            shakeRef.current = 0.35;
             onScore(150);
 
             setExplosions(prev => [...prev, {
               id: Math.random().toString(),
               position: enemy.position.clone(),
               life: 1.0,
-              particles: Array.from({ length: 10 }).map(() => ({
+              particles: Array.from({ length: 8 }).map(() => ({
                 position: new Vector3(0, 0, 0),
-                velocity: new Vector3((Math.random()-0.5)*10, (Math.random()-0.5)*10, (Math.random()-0.5)*10)
+                velocity: new Vector3((Math.random()-0.5)*8, (Math.random()-0.5)*8, (Math.random()-0.5)*8)
               }))
             }]);
           }
@@ -168,8 +169,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
     if (jetRef.current) {
       const playerPos = jetRef.current.position;
       enemies.forEach((enemy) => {
-        // 충돌 판정 범위를 기체 크기 감소에 맞춰 살짝 조정
-        if (playerPos.distanceTo(enemy.position) < 1.2) {
+        if (playerPos.distanceTo(enemy.position) < 1.1) {
           onGameOver();
         }
       });
