@@ -78,8 +78,9 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
     pos.z -= 1.0; 
     setBullets((prev) => [...prev, { id: Math.random().toString(), position: pos }]);
     
-    recoilZ.current = 0.35; 
-    shakeIntensity.current += 0.05;
+    // 사격 반동을 아주 미세하게 줄여 떨림을 방지 (0.35 -> 0.1)
+    // 사격 시 camera shakeIntensity 추가 부분 제거 (매 발사마다 흔들리는 현상 방지)
+    recoilZ.current = 0.1; 
   }, [speedFactor]);
 
   useFrame((state, delta) => {
@@ -89,25 +90,39 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
     const scaledDelta = delta * timeScaleRef.current;
     const difficulty = Math.min(state.clock.elapsedTime / 60, 5) * speedFactor;
 
-    // 카메라 위치 고정 및 쉐이크 (성능 최적화: Vector3 재사용 대신 직접 할당)
-    camera.position.x = (Math.random() - 0.5) * shakeIntensity.current;
-    camera.position.y = 2.5 + (Math.random() - 0.5) * shakeIntensity.current;
+    // 1. 카메라 쉐이크 최적화
+    // 폭발이나 피격 시에만 흔들리도록 함
+    if (shakeIntensity.current > 0.01) {
+      camera.position.x = (Math.random() - 0.5) * shakeIntensity.current;
+      camera.position.y = 2.5 + (Math.random() - 0.5) * shakeIntensity.current;
+    } else {
+      camera.position.x = 0;
+      camera.position.y = 2.5;
+      shakeIntensity.current = 0;
+    }
     camera.position.z = 13;
-    shakeIntensity.current = MathUtils.lerp(shakeIntensity.current, 0, 0.2);
+    shakeIntensity.current = MathUtils.lerp(shakeIntensity.current, 0, 0.15);
 
+    // 2. 비행기 조작
     if (jetRef.current && visualGroupRef.current) {
       const targetX = (pointer.x * viewport.width) / 2;
       const targetY = (pointer.y * viewport.height) / 2 + 1.2; 
       
-      // 반응성 상향: lerp 값을 0.75로 높여 딜레이를 제거함
-      jetRef.current.position.x = MathUtils.lerp(jetRef.current.position.x, targetX, 0.75);
-      jetRef.current.position.y = MathUtils.lerp(jetRef.current.position.y, targetY, 0.75);
+      jetRef.current.position.x = MathUtils.lerp(jetRef.current.position.x, targetX, 0.85);
+      jetRef.current.position.y = MathUtils.lerp(jetRef.current.position.y, targetY, 0.85);
       
-      visualGroupRef.current.position.z = MathUtils.lerp(visualGroupRef.current.position.z, recoilZ.current, 0.3);
-      recoilZ.current = MathUtils.lerp(recoilZ.current, 0, 0.15);
+      // 반동 연출 부드럽게
+      visualGroupRef.current.position.z = MathUtils.lerp(visualGroupRef.current.position.z, recoilZ.current, 0.2);
+      recoilZ.current = MathUtils.lerp(recoilZ.current, 0, 0.1);
 
-      visualGroupRef.current.rotation.z = MathUtils.lerp(visualGroupRef.current.rotation.z, -(jetRef.current.position.x - targetX) * 1.2, 0.1);
-      visualGroupRef.current.rotation.x = MathUtils.lerp(visualGroupRef.current.rotation.x, (jetRef.current.position.y - targetY) * 0.6, 0.1);
+      const dx = targetX - jetRef.current.position.x;
+      const dy = targetY - jetRef.current.position.y;
+      
+      const targetRotZ = Math.abs(dx) > 0.01 ? -dx * 1.5 : 0;
+      const targetRotX = Math.abs(dy) > 0.01 ? dy * 0.8 : 0;
+
+      visualGroupRef.current.rotation.z = MathUtils.lerp(visualGroupRef.current.rotation.z, targetRotZ, 0.1);
+      visualGroupRef.current.rotation.x = MathUtils.lerp(visualGroupRef.current.rotation.x, targetRotX, 0.1);
 
       const isInvulnerable = Date.now() - lastHitTime.current < 2000;
       jetRef.current.visible = isInvulnerable ? Math.floor(state.clock.elapsedTime * 10) % 2 === 0 : true;
@@ -124,8 +139,6 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
 
     setBullets((prev) => prev.map((b) => ({ ...b, position: b.position.clone().add(new Vector3(0, 0, -3.2 * timeScaleRef.current)) })).filter((b) => b.position.z > -90));
     setEnemies((prev) => prev.map((e) => ({ ...e, position: e.position.clone().add(new Vector3(0, 0, e.speed * timeScaleRef.current)) })).filter((e) => e.position.z < 30));
-    
-    // 파편 소멸 속도 상향 (성능 확보)
     setExplosions((prev) => prev.map(exp => ({ ...exp, life: exp.life - scaledDelta * (exp.isMega ? 1.5 : 2.5) })).filter(exp => exp.life > 0));
 
     setBullets((currentBullets) => {
@@ -141,10 +154,9 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
             
             const isMega = enemy.type === 'GOLIATH' || enemy.type === 'GHOST';
             timeScaleRef.current = isMega ? 0.05 : 0.2; 
-            shakeIntensity.current += isMega ? 3.5 : 0.7;
+            shakeIntensity.current += isMega ? 2.5 : 0.5; 
             onScore(enemy.points);
 
-            // 성능 최적화: 파편 개수를 대폭 줄임 (개별 객체 부하 감소)
             setExplosions(prev => [...prev, {
               id: Math.random().toString(),
               position: enemy.position.clone(),
@@ -176,7 +188,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
           if (playerPos.distanceTo(enemy.position) < 1.8) {
             onHit();
             lastHitTime.current = Date.now();
-            shakeIntensity.current = 2.5;
+            shakeIntensity.current = 2.0;
             setEnemies(prev => prev.filter(e => e.id !== enemy.id));
           }
         });
