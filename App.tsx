@@ -14,12 +14,12 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [status, setStatus] = useState<GameStatus>(GameStatus.START);
   const [highScore, setHighScore] = useState(0);
+  const [speedFactor, setSpeedFactor] = useState(0.6); // 기본값 Beginner (0.6)
 
   useEffect(() => {
     const saved = localStorage.getItem('neon-sky-high-score');
     if (saved) setHighScore(parseInt(saved, 10));
     
-    // 모바일에서 스크롤 방지
     const preventDefault = (e: TouchEvent) => {
       if (e.touches.length > 1) e.preventDefault();
     };
@@ -27,7 +27,8 @@ export default function App() {
     return () => document.removeEventListener('touchmove', preventDefault);
   }, []);
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback((factor: number) => {
+    setSpeedFactor(factor);
     setScore(0);
     setStatus(GameStatus.PLAYING);
   }, []);
@@ -57,13 +58,14 @@ export default function App() {
           powerPreference: "high-performance",
           alpha: false 
         }}
-        dpr={[1, 2]} // 모바일 성능 최적화를 위해 해상도 제한
+        dpr={[1, 2]}
       >
         <color attach="background" args={['#050010']} />
         <fog attach="fog" args={['#200040', 10, 50]} />
         
         <GameScene 
           status={status} 
+          speedFactor={speedFactor}
           onGameOver={gameOver} 
           onScore={incrementScore} 
         />

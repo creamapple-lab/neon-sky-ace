@@ -1,10 +1,14 @@
 
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Mesh, TextureLoader, RepeatWrapping, DoubleSide, Color } from 'three';
+import { Mesh, TextureLoader, RepeatWrapping, DoubleSide } from 'three';
 import { Stars } from '@react-three/drei';
 
-const Environment: React.FC = () => {
+interface EnvironmentProps {
+  speedFactor?: number;
+}
+
+const Environment: React.FC<EnvironmentProps> = ({ speedFactor = 1.0 }) => {
   const gridRef = useRef<Mesh>(null);
   const sunRef = useRef<Mesh>(null);
 
@@ -13,11 +17,11 @@ const Environment: React.FC = () => {
     
     if (gridRef.current) {
       const material = gridRef.current.material as any;
-      material.map.offset.y -= 0.08; // 바닥 움직임 속도
+      // 난이도 속도에 맞춰 그리드 이동 속도 동기화
+      material.map.offset.y -= 0.08 * speedFactor; 
     }
 
     if (sunRef.current) {
-      // 태양의 미세한 맥동 효과
       const s = 1 + Math.sin(t * 0.5) * 0.05;
       sunRef.current.scale.set(s, s, s);
     }
@@ -33,12 +37,10 @@ const Environment: React.FC = () => {
     ctx.fillStyle = '#050010';
     ctx.fillRect(0, 0, size, size);
     
-    // 네온 그리드 라인
     ctx.strokeStyle = '#ff00ff';
     ctx.lineWidth = 8;
     ctx.strokeRect(0, 0, size, size);
     
-    // 중앙 글로우 효과
     const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
     grad.addColorStop(0, 'rgba(255, 0, 255, 0.1)');
     grad.addColorStop(1, 'rgba(255, 0, 255, 0)');
@@ -55,7 +57,6 @@ const Environment: React.FC = () => {
     <>
       <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
       
-      {/* Retro Sun */}
       <mesh ref={sunRef} position={[0, 8, -45]}>
         <circleGeometry args={[15, 64]} />
         <meshBasicMaterial 
@@ -64,17 +65,14 @@ const Environment: React.FC = () => {
           opacity={0.8}
           side={DoubleSide}
         />
-        {/* 태양의 수평선 줄무늬 효과를 위한 마스크 대용 (단순 네온 레이어) */}
         <pointLight color="#ff00aa" intensity={10} distance={100} />
       </mesh>
 
-      {/* 지평선 글로우 */}
       <mesh position={[0, -2, -42]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[200, 20]} />
         <meshBasicMaterial color="#ff00ff" transparent opacity={0.2} />
       </mesh>
 
-      {/* Grid Floor */}
       <mesh ref={gridRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -3, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
         <meshStandardMaterial 

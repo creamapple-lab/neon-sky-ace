@@ -11,11 +11,12 @@ import { GameStatus, Bullet, Enemy, Explosion } from '../types';
 
 interface GameSceneProps {
   status: GameStatus;
+  speedFactor: number;
   onGameOver: () => void;
   onScore: (amount?: number) => void;
 }
 
-const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) => {
+const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onGameOver, onScore }) => {
   const { pointer, viewport, camera } = useThree();
   const jetRef = useRef<Group>(null);
   
@@ -30,24 +31,24 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
   const fire = useCallback(() => {
     if (!jetRef.current) return;
     const now = Date.now();
-    if (now - lastFireTime.current < 110) return;
+    // 난이도가 높을수록 연사 속도도 아주 약간 빨라지게 하여 쾌감을 유지
+    const fireRate = 120 / (speedFactor * 0.5 + 0.5);
+    if (now - lastFireTime.current < fireRate) return;
     
     lastFireTime.current = now;
     const pos = jetRef.current.position.clone();
-    // 비행기 코 부분(기두)에서 발사되도록 위치 조정 (-1.25 정도가 코 끝)
     pos.z -= 1.3; 
     
     setBullets((prev) => [
       ...prev,
       { id: Math.random().toString(), position: pos }
     ]);
-  }, []);
+  }, [speedFactor]);
 
   const spawnEnemy = useCallback((difficulty: number) => {
-    // 플레이어의 이동 가로 범위에 맞춤
-    const x = (Math.random() - 0.5) * (viewport.width * 1.5);
-    // 중요: 플레이어의 상하 이동 범위와 일치하도록 Y축 생성 로직 수정
-    const y = (Math.random() - 0.5) * viewport.height + 1.5;
+    const x = (Math.random() - 0.5) * (viewport.width * 1.8);
+    // Y 범위를 살짝 더 분산시킴
+    const y = (Math.random() - 0.5) * (viewport.height * 1.2) + 1.5;
     const z = -60;
     
     setEnemies((prev) => [
@@ -55,10 +56,11 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
       { 
         id: Math.random().toString(), 
         position: new Vector3(x, y, z), 
-        speed: 0.5 + (Math.random() * 0.2) + (difficulty * 0.08) 
+        // 전체 속도 상수를 speedFactor에 비례하게 조정
+        speed: (0.4 + (Math.random() * 0.15) + (difficulty * 0.05)) * speedFactor 
       }
     ]);
-  }, [viewport.width, viewport.height]);
+  }, [viewport.width, viewport.height, speedFactor]);
 
   useFrame((state, delta) => {
     if (status !== GameStatus.PLAYING) {
@@ -68,7 +70,8 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
     }
 
     const elapsedTime = state.clock.getElapsedTime();
-    const difficulty = Math.min(elapsedTime / 60, 5);
+    // 시간이 지날수록 어려워지는 가속도도 speedFactor에 영향받음
+    const difficulty = Math.min(elapsedTime / 60, 5) * speedFactor;
 
     // 카메라 셰이크
     if (shakeRef.current > 0) {
@@ -100,15 +103,14 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
         0.18
       );
       
-      // Banking & Tilting (전방을 향하도록 틸트 감도 조정)
       const tiltZ = -(jetRef.current.position.x - targetX) * 0.6;
       const tiltX = (jetRef.current.position.y - targetY) * 0.4;
       jetRef.current.rotation.z = MathUtils.lerp(jetRef.current.rotation.z, tiltZ, 0.1);
       jetRef.current.rotation.x = MathUtils.lerp(jetRef.current.rotation.x, tiltX, 0.1);
     }
 
-    // Enemy Spawning
-    const spawnInterval = Math.max(800 - (difficulty * 120), 300);
+    // Enemy Spawning (speedFactor가 낮을수록 생성 간격이 길어짐)
+    const spawnInterval = Math.max((1000 / speedFactor) - (difficulty * 100), 300);
     const now = Date.now();
     if (now - lastSpawnTime.current > spawnInterval) {
       spawnEnemy(difficulty);
@@ -141,10 +143,10 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
 
       currentBullets.forEach((bullet) => {
         enemies.forEach((enemy) => {
-          if (bullet.position.distanceTo(enemy.position) < 2.0) {
+          if (bullet.position.distanceTo(enemy.position) < 2.2) {
             hitEnemyIds.push(enemy.id);
             filteredBullets = filteredBullets.filter(b => b.id !== bullet.id);
-            shakeRef.current = 0.35;
+            shakeRef.current = 0.3;
             onScore(150);
 
             setExplosions(prev => [...prev, {
@@ -182,7 +184,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
       <directionalLight position={[10, 20, 10]} intensity={1.5} color="#00ffff" />
       <pointLight position={[0, 5, 5]} intensity={2} color="#ff00ff" />
       
-      <Environment />
+      <Environment speedFactor={speedFactor} />
       
       {status === GameStatus.PLAYING && (
         <>
