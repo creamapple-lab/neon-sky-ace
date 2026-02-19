@@ -78,8 +78,8 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
     pos.z -= 1.0; 
     setBullets((prev) => [...prev, { id: Math.random().toString(), position: pos }]);
     
-    recoilZ.current = 0.4; 
-    shakeIntensity.current += 0.06;
+    recoilZ.current = 0.35; 
+    shakeIntensity.current += 0.05;
   }, [speedFactor]);
 
   useFrame((state, delta) => {
@@ -89,25 +89,25 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
     const scaledDelta = delta * timeScaleRef.current;
     const difficulty = Math.min(state.clock.elapsedTime / 60, 5) * speedFactor;
 
-    const baseCameraPos = new Vector3(0, 2.5, 13);
-    const currentShake = shakeIntensity.current;
-    camera.position.x = baseCameraPos.x + (Math.random() - 0.5) * currentShake;
-    camera.position.y = baseCameraPos.y + (Math.random() - 0.5) * currentShake;
-    camera.position.z = baseCameraPos.z;
+    // 카메라 위치 고정 및 쉐이크 (성능 최적화: Vector3 재사용 대신 직접 할당)
+    camera.position.x = (Math.random() - 0.5) * shakeIntensity.current;
+    camera.position.y = 2.5 + (Math.random() - 0.5) * shakeIntensity.current;
+    camera.position.z = 13;
     shakeIntensity.current = MathUtils.lerp(shakeIntensity.current, 0, 0.2);
 
     if (jetRef.current && visualGroupRef.current) {
       const targetX = (pointer.x * viewport.width) / 2;
       const targetY = (pointer.y * viewport.height) / 2 + 1.2; 
       
-      jetRef.current.position.x = MathUtils.lerp(jetRef.current.position.x, targetX, 0.4);
-      jetRef.current.position.y = MathUtils.lerp(jetRef.current.position.y, targetY, 0.4);
+      // 반응성 상향: lerp 값을 0.75로 높여 딜레이를 제거함
+      jetRef.current.position.x = MathUtils.lerp(jetRef.current.position.x, targetX, 0.75);
+      jetRef.current.position.y = MathUtils.lerp(jetRef.current.position.y, targetY, 0.75);
       
       visualGroupRef.current.position.z = MathUtils.lerp(visualGroupRef.current.position.z, recoilZ.current, 0.3);
       recoilZ.current = MathUtils.lerp(recoilZ.current, 0, 0.15);
 
-      visualGroupRef.current.rotation.z = MathUtils.lerp(visualGroupRef.current.rotation.z, -(jetRef.current.position.x - targetX) * 0.9, 0.15);
-      visualGroupRef.current.rotation.x = MathUtils.lerp(visualGroupRef.current.rotation.x, (jetRef.current.position.y - targetY) * 0.5, 0.15);
+      visualGroupRef.current.rotation.z = MathUtils.lerp(visualGroupRef.current.rotation.z, -(jetRef.current.position.x - targetX) * 1.2, 0.1);
+      visualGroupRef.current.rotation.x = MathUtils.lerp(visualGroupRef.current.rotation.x, (jetRef.current.position.y - targetY) * 0.6, 0.1);
 
       const isInvulnerable = Date.now() - lastHitTime.current < 2000;
       jetRef.current.visible = isInvulnerable ? Math.floor(state.clock.elapsedTime * 10) % 2 === 0 : true;
@@ -124,7 +124,9 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
 
     setBullets((prev) => prev.map((b) => ({ ...b, position: b.position.clone().add(new Vector3(0, 0, -3.2 * timeScaleRef.current)) })).filter((b) => b.position.z > -90));
     setEnemies((prev) => prev.map((e) => ({ ...e, position: e.position.clone().add(new Vector3(0, 0, e.speed * timeScaleRef.current)) })).filter((e) => e.position.z < 30));
-    setExplosions((prev) => prev.map(exp => ({ ...exp, life: exp.life - scaledDelta * (exp.isMega ? 1.0 : 1.8) })).filter(exp => exp.life > 0));
+    
+    // 파편 소멸 속도 상향 (성능 확보)
+    setExplosions((prev) => prev.map(exp => ({ ...exp, life: exp.life - scaledDelta * (exp.isMega ? 1.5 : 2.5) })).filter(exp => exp.life > 0));
 
     setBullets((currentBullets) => {
       let filteredBullets = [...currentBullets];
@@ -138,24 +140,24 @@ const GameScene: React.FC<GameSceneProps> = ({ status, speedFactor, onHit, onSco
             filteredBullets = filteredBullets.filter(b => b.id !== bullet.id);
             
             const isMega = enemy.type === 'GOLIATH' || enemy.type === 'GHOST';
-            timeScaleRef.current = isMega ? 0.05 : 0.15; 
+            timeScaleRef.current = isMega ? 0.05 : 0.2; 
             shakeIntensity.current += isMega ? 3.5 : 0.7;
             onScore(enemy.points);
 
-            // 파편 생성 로직: 속도 벡터의 무작위성을 키워 사방으로 흩어지게 함
+            // 성능 최적화: 파편 개수를 대폭 줄임 (개별 객체 부하 감소)
             setExplosions(prev => [...prev, {
               id: Math.random().toString(),
               position: enemy.position.clone(),
               color: enemy.color,
               isMega,
               life: 1.0,
-              particles: Array.from({ length: isMega ? 250 : 45 }).map(() => ({
+              particles: Array.from({ length: isMega ? 80 : 15 }).map(() => ({
                 position: new Vector3(0, 0, 0),
                 velocity: new Vector3(
-                  (Math.random() - 0.5) * 10, 
-                  (Math.random() - 0.5) * 10, 
-                  (Math.random() - 0.5) * 10
-                ).normalize().multiplyScalar(Math.random() * 2 + 1) // 방향 정규화 후 무작위 속도
+                  (Math.random() - 0.5) * 12, 
+                  (Math.random() - 0.5) * 12, 
+                  (Math.random() - 0.5) * 12
+                )
               }))
             }]);
           }
