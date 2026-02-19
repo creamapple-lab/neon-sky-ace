@@ -14,7 +14,8 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [status, setStatus] = useState<GameStatus>(GameStatus.START);
   const [highScore, setHighScore] = useState(0);
-  const [speedFactor, setSpeedFactor] = useState(0.6); // 기본값 Beginner (0.6)
+  const [lives, setLives] = useState(3);
+  const [speedFactor, setSpeedFactor] = useState(0.85);
 
   useEffect(() => {
     const saved = localStorage.getItem('neon-sky-high-score');
@@ -30,11 +31,19 @@ export default function App() {
   const startGame = useCallback((factor: number) => {
     setSpeedFactor(factor);
     setScore(0);
+    setLives(3);
     setStatus(GameStatus.PLAYING);
   }, []);
 
-  const gameOver = useCallback(() => {
-    setStatus(GameStatus.GAMEOVER);
+  const handleHit = useCallback(() => {
+    setLives((prev) => {
+      const next = prev - 1;
+      if (next <= 0) {
+        setStatus(GameStatus.GAMEOVER);
+        return 0;
+      }
+      return next;
+    });
   }, []);
 
   const incrementScore = useCallback((amount: number = 100) => {
@@ -66,7 +75,7 @@ export default function App() {
         <GameScene 
           status={status} 
           speedFactor={speedFactor}
-          onGameOver={gameOver} 
+          onHit={handleHit} 
           onScore={incrementScore} 
         />
 
@@ -85,6 +94,7 @@ export default function App() {
       <HUD 
         score={score} 
         status={status} 
+        lives={lives}
         onStart={startGame} 
         highScore={highScore}
       />
