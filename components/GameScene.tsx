@@ -1,5 +1,5 @@
 
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, MathUtils } from 'three';
 import Jet from './Jet';
@@ -16,7 +16,7 @@ interface GameSceneProps {
 }
 
 const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) => {
-  const { mouse, viewport, camera } = useThree();
+  const { pointer, viewport, camera } = useThree();
   const jetRef = useRef<Group>(null);
   
   const [bullets, setBullets] = useState<Bullet[]>([]);
@@ -43,8 +43,9 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
   }, []);
 
   const spawnEnemy = useCallback((difficulty: number) => {
-    const x = (Math.random() - 0.5) * 25;
-    const y = (Math.random() - 0.5) * 12 + 4;
+    // 적 생성 범위도 뷰포트에 맞게 조절
+    const x = (Math.random() - 0.5) * (viewport.width * 1.5);
+    const y = (Math.random() - 0.5) * (viewport.height * 1.5) + 4;
     const z = -60;
     
     setEnemies((prev) => [
@@ -55,7 +56,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
         speed: 0.4 + (Math.random() * 0.2) + (difficulty * 0.05) 
       }
     ]);
-  }, []);
+  }, [viewport.width, viewport.height]);
 
   useFrame((state, delta) => {
     if (status !== GameStatus.PLAYING) {
@@ -65,45 +66,58 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
     }
 
     const elapsedTime = state.clock.getElapsedTime();
-    const difficulty = Math.min(elapsedTime / 60, 5); // 시간에 따른 난이도 상승 (최대 5배)
+    const difficulty = Math.min(elapsedTime / 60, 5);
 
-    // 카메라 셰이크 적용
+    // 카메라 셰이크
     if (shakeRef.current > 0) {
       camera.position.x += (Math.random() - 0.5) * shakeRef.current;
       camera.position.y += (Math.random() - 0.5) * shakeRef.current;
-      shakeRef.current *= 0.9;
+      shakeRef.current *= 0.85;
     } else {
       camera.position.x = MathUtils.lerp(camera.position.x, 0, 0.1);
       camera.position.y = MathUtils.lerp(camera.position.y, 2, 0.1);
     }
 
-    // Jet movement
+    // Jet movement (Using pointer for mobile support)
     if (jetRef.current) {
-      const targetX = (mouse.x * viewport.width) / 2;
-      const targetY = (mouse.y * viewport.height) / 2 + 3;
+      // 뷰포트 영역 내에서만 이동하도록 제한
+      const targetX = (pointer.x * viewport.width) / 2;
+      const targetY = (pointer.y * viewport.height) / 2 + 3;
       
-      jetRef.current.position.x = MathUtils.lerp(jetRef.current.position.x, targetX, 0.12);
-      jetRef.current.position.y = MathUtils.lerp(jetRef.current.position.y, targetY, 0.12);
+      const boundX = viewport.width / 2 - 1;
+      const boundYTop = viewport.height + 2;
+      const boundYBottom = 1;
+
+      jetRef.current.position.x = MathUtils.lerp(
+        jetRef.current.position.x, 
+        MathUtils.clamp(targetX, -boundX, boundX), 
+        0.15
+      );
+      jetRef.current.position.y = MathUtils.lerp(
+        jetRef.current.position.y, 
+        MathUtils.clamp(targetY, boundYBottom, boundYTop), 
+        0.15
+      );
       
-      // Banking & Pitching
-      const tiltZ = -(jetRef.current.position.x - targetX) * 0.8;
-      const tiltX = (jetRef.current.position.y - targetY) * 0.4;
+      // Banking
+      const tiltZ = -(jetRef.current.position.x - targetX) * 0.5;
+      const tiltX = (jetRef.current.position.y - targetY) * 0.3;
       jetRef.current.rotation.z = MathUtils.lerp(jetRef.current.rotation.z, tiltZ, 0.1);
       jetRef.current.rotation.x = MathUtils.lerp(jetRef.current.rotation.x, tiltX, 0.1);
     }
 
     // Enemy Spawning
-    const spawnInterval = Math.max(1000 - (difficulty * 150), 300);
+    const spawnInterval = Math.max(1000 - (difficulty * 150), 350);
     const now = Date.now();
     if (now - lastSpawnTime.current > spawnInterval) {
       spawnEnemy(difficulty);
       lastSpawnTime.current = now;
     }
 
-    // Shooting - Auto-fire is always active as per game design
+    // Auto-fire
     fire();
 
-    // Update Entities
+    // Entities Update
     setBullets((prev) => prev
       .map((b) => ({ ...b, position: b.position.clone().add(new Vector3(0, 0, -1.8)) }))
       .filter((b) => b.position.z > -70)
@@ -115,31 +129,30 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
     );
 
     setExplosions((prev) => prev
-      .map(exp => ({ ...exp, life: exp.life - delta * 1.5 }))
+      .map(exp => ({ ...exp, life: exp.life - delta * 2 }))
       .filter(exp => exp.life > 0)
     );
 
-    // Collision: Bullet vs Enemy
+    // Collision
     setBullets((currentBullets) => {
       let filteredBullets = [...currentBullets];
       let hitEnemyIds: string[] = [];
 
       currentBullets.forEach((bullet) => {
         enemies.forEach((enemy) => {
-          if (bullet.position.distanceTo(enemy.position) < 1.8) {
+          if (bullet.position.distanceTo(enemy.position) < 2.0) {
             hitEnemyIds.push(enemy.id);
             filteredBullets = filteredBullets.filter(b => b.id !== bullet.id);
-            
-            shakeRef.current = 0.3;
+            shakeRef.current = 0.4;
             onScore(150);
 
             setExplosions(prev => [...prev, {
               id: Math.random().toString(),
               position: enemy.position.clone(),
               life: 1.0,
-              particles: Array.from({ length: 12 }).map(() => ({
+              particles: Array.from({ length: 10 }).map(() => ({
                 position: new Vector3(0, 0, 0),
-                velocity: new Vector3((Math.random()-0.5)*8, (Math.random()-0.5)*8, (Math.random()-0.5)*8)
+                velocity: new Vector3((Math.random()-0.5)*10, (Math.random()-0.5)*10, (Math.random()-0.5)*10)
               }))
             }]);
           }
@@ -152,11 +165,10 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
       return filteredBullets;
     });
 
-    // Collision: Player vs Enemy
     if (jetRef.current) {
       const playerPos = jetRef.current.position;
       enemies.forEach((enemy) => {
-        if (playerPos.distanceTo(enemy.position) < 1.4) {
+        if (playerPos.distanceTo(enemy.position) < 1.5) {
           onGameOver();
         }
       });
@@ -165,7 +177,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
 
   return (
     <>
-      <ambientLight intensity={0.4} />
+      <ambientLight intensity={0.5} />
       <directionalLight position={[10, 20, 10]} intensity={1.5} color="#00ffff" />
       <pointLight position={[0, 5, 5]} intensity={2} color="#ff00ff" />
       

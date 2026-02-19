@@ -15,10 +15,16 @@ export default function App() {
   const [status, setStatus] = useState<GameStatus>(GameStatus.START);
   const [highScore, setHighScore] = useState(0);
 
-  // 로컬 스토리지에서 하이 스코어 불러오기
   useEffect(() => {
     const saved = localStorage.getItem('neon-sky-high-score');
     if (saved) setHighScore(parseInt(saved, 10));
+    
+    // 모바일에서 스크롤 방지
+    const preventDefault = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+    document.addEventListener('touchmove', preventDefault, { passive: false });
+    return () => document.removeEventListener('touchmove', preventDefault);
   }, []);
 
   const startGame = useCallback(() => {
@@ -42,11 +48,16 @@ export default function App() {
   }, [highScore]);
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden touch-none">
+    <div className="relative w-full h-[100dvh] bg-black overflow-hidden touch-none">
       <Canvas
         shadows
         camera={{ position: [0, 2, 12], fov: 60 }}
-        gl={{ antialias: false, powerPreference: "high-performance" }}
+        gl={{ 
+          antialias: false, 
+          powerPreference: "high-performance",
+          alpha: false 
+        }}
+        dpr={[1, 2]} // 모바일 성능 최적화를 위해 해상도 제한
       >
         <color attach="background" args={['#050010']} />
         <fog attach="fog" args={['#200040', 10, 50]} />
@@ -57,15 +68,14 @@ export default function App() {
           onScore={incrementScore} 
         />
 
-        {/* Removed disableNormalPass as it is not supported on the EffectComposer component in this version */}
-        <EffectComposer>
+        <EffectComposer multisampling={0}>
           <Bloom 
-            luminanceThreshold={0.2} 
+            luminanceThreshold={0.5} 
             mipmapBlur 
-            intensity={1.2} 
-            radius={0.4} 
+            intensity={1.0} 
+            radius={0.3} 
           />
-          <Noise opacity={0.05} />
+          <Noise opacity={0.03} />
           <Vignette eskil={false} offset={0.1} darkness={1.1} />
         </EffectComposer>
       </Canvas>
@@ -78,7 +88,7 @@ export default function App() {
       />
       
       <footer className="absolute bottom-4 w-full text-center pointer-events-none z-10">
-        <p className="text-cyan-500/40 text-[10px] tracking-[0.3em] font-mono uppercase">
+        <p className="text-cyan-500/40 text-[8px] sm:text-[10px] tracking-[0.3em] font-mono uppercase">
           © AI CITY BUILDERS & CONNECT AI LAB BY JAY
         </p>
       </footer>
