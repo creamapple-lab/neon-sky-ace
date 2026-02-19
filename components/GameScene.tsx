@@ -43,9 +43,8 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
   }, []);
 
   const spawnEnemy = useCallback((difficulty: number) => {
-    // 적 생성 범위도 뷰포트에 맞게 조절
     const x = (Math.random() - 0.5) * (viewport.width * 1.5);
-    const y = (Math.random() - 0.5) * (viewport.height * 1.5) + 4;
+    const y = (Math.random() - 0.5) * (viewport.height * 1.2) + 3;
     const z = -60;
     
     setEnemies((prev) => [
@@ -53,7 +52,7 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
       { 
         id: Math.random().toString(), 
         position: new Vector3(x, y, z), 
-        speed: 0.4 + (Math.random() * 0.2) + (difficulty * 0.05) 
+        speed: 0.45 + (Math.random() * 0.2) + (difficulty * 0.05) 
       }
     ]);
   }, [viewport.width, viewport.height]);
@@ -78,15 +77,16 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
       camera.position.y = MathUtils.lerp(camera.position.y, 2, 0.1);
     }
 
-    // Jet movement (Using pointer for mobile support)
+    // Jet movement
     if (jetRef.current) {
-      // 뷰포트 영역 내에서만 이동하도록 제한
+      // 뷰포트 영역 내에서 이동 범위 조정
+      // 기존 +3 오프셋을 +1.5로 줄여 기본 위치를 낮춤
       const targetX = (pointer.x * viewport.width) / 2;
-      const targetY = (pointer.y * viewport.height) / 2 + 3;
+      const targetY = (pointer.y * viewport.height) / 2 + 1.5; 
       
-      const boundX = viewport.width / 2 - 1;
-      const boundYTop = viewport.height + 2;
-      const boundYBottom = 1;
+      const boundX = viewport.width / 2 - 0.8;
+      const boundYTop = viewport.height + 1;
+      const boundYBottom = -1.5; // 바닥 그리드 근처까지 내려가도록 허용
 
       jetRef.current.position.x = MathUtils.lerp(
         jetRef.current.position.x, 
@@ -99,9 +99,9 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
         0.15
       );
       
-      // Banking
-      const tiltZ = -(jetRef.current.position.x - targetX) * 0.5;
-      const tiltX = (jetRef.current.position.y - targetY) * 0.3;
+      // Banking & Tilting
+      const tiltZ = -(jetRef.current.position.x - targetX) * 0.6;
+      const tiltX = (jetRef.current.position.y - targetY) * 0.4;
       jetRef.current.rotation.z = MathUtils.lerp(jetRef.current.rotation.z, tiltZ, 0.1);
       jetRef.current.rotation.x = MathUtils.lerp(jetRef.current.rotation.x, tiltX, 0.1);
     }
@@ -168,7 +168,8 @@ const GameScene: React.FC<GameSceneProps> = ({ status, onGameOver, onScore }) =>
     if (jetRef.current) {
       const playerPos = jetRef.current.position;
       enemies.forEach((enemy) => {
-        if (playerPos.distanceTo(enemy.position) < 1.5) {
+        // 충돌 판정 범위를 기체 크기 감소에 맞춰 살짝 조정
+        if (playerPos.distanceTo(enemy.position) < 1.2) {
           onGameOver();
         }
       });

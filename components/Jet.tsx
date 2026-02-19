@@ -4,7 +4,7 @@ import { Group } from 'three';
 
 const Jet = forwardRef<Group>((props, ref) => {
   return (
-    <group ref={ref} {...props}>
+    <group ref={ref} {...props} scale={0.65}> {/* 전체 스케일 축소 */}
       {/* 메인 바디 */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <coneGeometry args={[0.3, 2.5, 4]} />
